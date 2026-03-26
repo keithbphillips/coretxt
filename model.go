@@ -37,6 +37,7 @@ type Model struct {
 	height      int
 	statusMsg        string
 	quitConfirm      bool
+	typewriterMode   bool // true while typing, false while navigating
 	spellWord        string
 	spellSuggestions []string
 	spellWordLeft    int
@@ -109,7 +110,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ta.SetWidth(msg.Width)
-		m.ta.SetHeight(taHeight(msg.Height))
+		m.syncTaHeight()
 		return m, nil
 
 	case tickMsg:
@@ -351,6 +352,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, focusCmd
 
 		case "enter":
+			m.typewriterMode = true
 			m.quitConfirm = false
 			m.dirty = true
 			if isEndOfParagraph(m.ta) {
@@ -362,6 +364,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// can land below the viewport and disappear. A no-op Update fixes it.
 			var taCmd tea.Cmd
 			m.ta, taCmd = m.ta.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{}})
+			m.syncTaHeight()
 			cmds = append(cmds, taCmd)
 			return m, tea.Batch(cmds...)
 
@@ -369,9 +372,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitConfirm = false
 			if !isNavigationKey(msg) {
 				m.dirty = true
+				m.typewriterMode = true
+			} else {
+				m.typewriterMode = false
 			}
 			var taCmd tea.Cmd
 			m.ta, taCmd = m.ta.Update(msg)
+			m.syncTaHeight()
 			cmds = append(cmds, taCmd)
 			return m, tea.Batch(cmds...)
 		}
@@ -380,6 +387,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// All other messages (mouse, focus, blink) go to textarea
 	var taCmd tea.Cmd
 	m.ta, taCmd = m.ta.Update(msg)
+	m.syncTaHeight()
 	cmds = append(cmds, taCmd)
 	return m, tea.Batch(cmds...)
 }
@@ -408,9 +416,9 @@ func (m Model) View() string {
 		Width(m.width).
 		Render("")
 
-	// Textarea occupies the top half; cursor stays at its bottom = mid-screen.
-	// Fill the lower half with styled blank lines so the background is consistent.
-	th := taHeight(m.height)
+	// Fill any remaining space below the textarea with styled blank lines so
+	// the background colour is consistent across the whole screen.
+	th := m.ta.Height()
 	totalDoc := m.height - 4 // header + spacer + statusbar + keyhints
 	padLines := totalDoc - th
 	if padLines < 0 {
@@ -498,4 +506,28 @@ func taHeight(termHeight int) int {
 		h = 1
 	}
 	return h
+}
+
+// syncTaHeight switches between two modes:
+//   - Typewriter mode (last key was a typing key): textarea occupies the top
+//     half of the screen so the cursor sits at mid-screen while writing.
+//   - Reading mode (last key was a navigation key): textarea fills the full
+//     available height so scrolling uses the whole screen.
+func (m *Model) syncTaHeight() {
+	if m.height == 0 {
+		return
+	}
+	available := m.height - 4
+	if available < 1 {
+		available = 1
+	}
+	if !m.typewriterMode {
+		m.ta.SetHeight(available)
+		return
+	}
+	half := available / 2
+	if half < 1 {
+		half = 1
+	}
+	m.ta.SetHeight(half)
 }

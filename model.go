@@ -459,12 +459,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Mouse events switch to reading mode so the full viewport is available.
-	if _, ok := msg.(tea.MouseMsg); ok {
+	// Mouse wheel: move the cursor so the viewport can scroll the full
+	// document. Other mouse events (clicks, motion) pass through normally.
+	if mm, ok := msg.(tea.MouseMsg); ok {
 		m.typewriterMode = false
+		switch mm.Button {
+		case tea.MouseButtonWheelUp:
+			for i := 0; i < 3; i++ {
+				m.ta, _ = m.ta.Update(tea.KeyMsg{Type: tea.KeyUp})
+			}
+			m.syncTaHeight()
+			return m, tea.Batch(cmds...)
+		case tea.MouseButtonWheelDown:
+			for i := 0; i < 3; i++ {
+				m.ta, _ = m.ta.Update(tea.KeyMsg{Type: tea.KeyDown})
+			}
+			m.syncTaHeight()
+			return m, tea.Batch(cmds...)
+		}
 	}
 
-	// All other messages (mouse, focus, blink) go to textarea
+	// All other messages (focus, blink, non-wheel mouse) go to textarea
 	var taCmd tea.Cmd
 	m.ta, taCmd = m.ta.Update(msg)
 	m.syncTaHeight()

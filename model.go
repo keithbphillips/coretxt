@@ -39,6 +39,8 @@ type Model struct {
 	quitConfirm      bool
 	typewriterMode   bool   // true while typing, false while navigating
 	browserDir       string // current directory shown in the file browser
+	browserSaveMode  bool   // true when browser was opened for saving
+	promptDir        string // directory used by name prompt when saving
 	spellWord        string
 	spellSuggestions []string
 	spellWordLeft    int
@@ -162,8 +164,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if filepath.Ext(name) == "" {
 						name += ".txt"
 					}
-					m.filename = resolvePath(name)
+					if m.promptDir != "" && !filepath.IsAbs(name) {
+						m.filename = filepath.Join(m.promptDir, name)
+					} else {
+						m.filename = resolvePath(name)
+					}
 				}
+				m.promptDir = ""
 				if m.filename != "" && m.filename != "untitled.txt" {
 					if err := m.performSave(); err != nil {
 						m.statusMsg = "Save error: " + err.Error()
@@ -189,18 +196,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// ── File browser mode ─────────────────────────────────────────────
 		if m.mode == modeFileBrowser {
+			filtering := m.fileBrowser.FilterState() == list.Filtering
 			switch msg.String() {
 			case "esc":
-				if m.fileBrowser.FilterState() == list.Filtering {
+				if filtering {
 					var lCmd tea.Cmd
 					m.fileBrowser, lCmd = m.fileBrowser.Update(msg)
 					return m, lCmd
 				}
 				m.mode = modeEdit
+				m.browserSaveMode = false
 				return m, nil
 
 			case "backspace":
-				if m.fileBrowser.FilterState() == list.Filtering {
+				if filtering {
 					var lCmd tea.Cmd
 					m.fileBrowser, lCmd = m.fileBrowser.Update(msg)
 					return m, lCmd
@@ -212,8 +221,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 
+			case "n":
+				if m.browserSaveMode && !filtering {
+					m.promptDir = m.browserDir
+					prefill := ""
+					if m.filename != "" && filepath.Dir(m.filename) == m.browserDir {
+						prefill = filepath.Base(m.filename)
+					}
+					return m, m.openNamePrompt(prefill)
+				}
+				var lCmd tea.Cmd
+				m.fileBrowser, lCmd = m.fileBrowser.Update(msg)
+				return m, lCmd
+
 			case "enter":
-				if m.fileBrowser.FilterState() == list.Filtering {
+				if filtering {
 					var lCmd tea.Cmd
 					m.fileBrowser, lCmd = m.fileBrowser.Update(msg)
 					return m, lCmd
@@ -223,6 +245,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.browserDir = item.path
 						m.rebuildFileBrowser()
 						return m, nil
+					}
+					if m.browserSaveMode {
+						m.filename = item.path
+						m.browserSaveMode = false
+						m.mode = modeEdit
+						if err := m.performSave(); err != nil {
+							m.statusMsg = "Save error: " + err.Error()
+						} else {
+							m.statusMsg = "Saved as \"" + filepath.Base(item.path) + "\" ✓"
+							p := loadPrefs()
+							p.LastDir = m.browserDir
+							savePrefs(p)
+						}
+						return m, clearStatus(3 * time.Second)
 					}
 					content, err := loadFile(item.path)
 					if err == nil {
@@ -310,7 +346,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "ctrl+s":
 			if m.filename == "" || m.filename == "untitled.txt" {
-				return m, m.openNamePrompt("")
+				m.openSaveBrowser()
+				return m, nil
 			}
 			if err := m.performSave(); err != nil {
 				m.statusMsg = "Save error: " + err.Error()
@@ -320,16 +357,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, clearStatus(2 * time.Second)
 
 		case "ctrl+o": // Open file browser
+			m.browserSaveMode = false
 			m.rebuildFileBrowser()
 			m.mode = modeFileBrowser
 			return m, nil
 
 		case "f3": // Save As
-			current := m.filename
-			if current == "untitled.txt" {
-				current = ""
-			}
-			return m, m.openNamePrompt(current)
+			m.openSaveBrowser()
+			return m, nil
 
 		case "ctrl+q":
 			if m.dirty {
@@ -471,6 +506,16 @@ func (m *Model) rebuildFileBrowser() {
 	}
 	items := scanDir(m.browserDir)
 	m.fileBrowser = newFileBrowser(themes[m.themeIdx], items, bw, bh, m.browserDir)
+	if m.browserSaveMode {
+		m.fileBrowser.Title = "⬡ Save to: " + filepath.Base(m.browserDir)
+	}
+}
+
+// openSaveBrowser switches to the file browser in save mode.
+func (m *Model) openSaveBrowser() {
+	m.browserSaveMode = true
+	m.rebuildFileBrowser()
+	m.mode = modeFileBrowser
 }
 
 // openNamePrompt switches to the filename prompt, pre-filling with prefill.

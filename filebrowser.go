@@ -161,7 +161,12 @@ func newFileBrowser(t Theme, items []list.Item, w, h int, dir string) list.Model
 func renderFileBrowser(m Model) string {
 	t := themes[m.themeIdx]
 
-	hint := dimText(t).Render("  ↑↓ Navigate  Enter Open  ⌫ Up  / Filter  Esc Close  ")
+	var hint string
+	if m.browserSaveMode {
+		hint = dimText(t).Render("  ↑↓ Navigate  Enter Overwrite  N New name  ⌫ Up  / Filter  Esc Cancel  ")
+	} else {
+		hint = dimText(t).Render("  ↑↓ Navigate  Enter Open  ⌫ Up  / Filter  Esc Close  ")
+	}
 
 	inner := lipgloss.JoinVertical(lipgloss.Left,
 		m.fileBrowser.View(),

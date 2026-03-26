@@ -14,25 +14,49 @@ import (
 
 type fileItem struct {
 	path    string // full path
+	name    string // display name (may include trailing "/" for dirs)
 	size    int64
 	modTime time.Time
+	isDir   bool
 }
 
-func (f fileItem) Title() string       { return filepath.Base(f.path) }
-func (f fileItem) FilterValue() string { return filepath.Base(f.path) }
+func (f fileItem) Title() string       { return f.name }
+func (f fileItem) FilterValue() string { return f.name }
 func (f fileItem) Description() string {
+	if f.isDir {
+		return "folder"
+	}
 	return fmt.Sprintf("%s  ·  %s", formatFileSize(f.size), formatFileAge(f.modTime))
 }
 
 // ─── Directory scan ───────────────────────────────────────────────────────────
 
-func scanTxtFiles() []list.Item {
-	dir := docsDir()
+// scanDir returns list items for dir: a ".." entry (unless at fs root),
+// then subdirectories, then .txt files.
+func scanDir(dir string) []list.Item {
+	var items []list.Item
+
+	// Parent entry
+	parent := filepath.Dir(dir)
+	if parent != dir {
+		items = append(items, fileItem{path: parent, name: "../", isDir: true})
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil
+		return items
 	}
-	var items []list.Item
+
+	// Dirs first, then .txt files
+	for _, e := range entries {
+		if e.IsDir() {
+			items = append(items, fileItem{
+				path:  filepath.Join(dir, e.Name()),
+				name:  e.Name() + "/",
+				isDir: true,
+			})
+		}
+	}
 	for _, e := range entries {
 		if e.IsDir() || filepath.Ext(e.Name()) != ".txt" {
 			continue
@@ -43,6 +67,7 @@ func scanTxtFiles() []list.Item {
 		}
 		items = append(items, fileItem{
 			path:    filepath.Join(dir, e.Name()),
+			name:    e.Name(),
 			size:    info.Size(),
 			modTime: info.ModTime(),
 		})
@@ -52,7 +77,7 @@ func scanTxtFiles() []list.Item {
 
 // ─── Constructor ──────────────────────────────────────────────────────────────
 
-func newFileBrowser(t Theme, items []list.Item, w, h int) list.Model {
+func newFileBrowser(t Theme, items []list.Item, w, h int, dir string) list.Model {
 	d := list.NewDefaultDelegate()
 
 	// Selected item styles
@@ -90,7 +115,7 @@ func newFileBrowser(t Theme, items []list.Item, w, h int) list.Model {
 		Bold(true)
 
 	l := list.New(items, d, w, h)
-	l.Title = "⬡ Open Document"
+	l.Title = "⬡ " + filepath.Base(dir)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(true)
 	l.SetFilteringEnabled(true)
@@ -136,7 +161,7 @@ func newFileBrowser(t Theme, items []list.Item, w, h int) list.Model {
 func renderFileBrowser(m Model) string {
 	t := themes[m.themeIdx]
 
-	hint := dimText(t).Render("  ↑↓ Navigate  /  Filter  Enter Select  Esc Close  ")
+	hint := dimText(t).Render("  ↑↓ Navigate  Enter Open  ⌫ Up  / Filter  Esc Close  ")
 
 	inner := lipgloss.JoinVertical(lipgloss.Left,
 		m.fileBrowser.View(),

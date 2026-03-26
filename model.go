@@ -37,7 +37,8 @@ type Model struct {
 	height      int
 	statusMsg        string
 	quitConfirm      bool
-	typewriterMode   bool // true while typing, false while navigating
+	typewriterMode   bool   // true while typing, false while navigating
+	browserDir       string // current directory shown in the file browser
 	spellWord        string
 	spellSuggestions []string
 	spellWordLeft    int
@@ -60,11 +61,17 @@ func newModel(filename string) Model {
 
 	p := loadPrefs()
 
+	browserDir := p.LastDir
+	if browserDir == "" {
+		browserDir = docsDir()
+	}
+
 	m := Model{
-		ta:        ta,
-		nameInput: ni,
-		themeIdx:  p.ThemeIdx,
-		filename:  filename,
+		ta:         ta,
+		nameInput:  ni,
+		themeIdx:   p.ThemeIdx,
+		filename:   filename,
+		browserDir: browserDir,
 	}
 
 	applyTheme(&m.ta, themes[m.themeIdx])
@@ -185,7 +192,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "esc":
 				if m.fileBrowser.FilterState() == list.Filtering {
-					// Let the list exit filter mode
 					var lCmd tea.Cmd
 					m.fileBrowser, lCmd = m.fileBrowser.Update(msg)
 					return m, lCmd
@@ -193,14 +199,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = modeEdit
 				return m, nil
 
+			case "backspace":
+				if m.fileBrowser.FilterState() == list.Filtering {
+					var lCmd tea.Cmd
+					m.fileBrowser, lCmd = m.fileBrowser.Update(msg)
+					return m, lCmd
+				}
+				parent := filepath.Dir(m.browserDir)
+				if parent != m.browserDir {
+					m.browserDir = parent
+					m.rebuildFileBrowser()
+				}
+				return m, nil
+
 			case "enter":
 				if m.fileBrowser.FilterState() == list.Filtering {
-					// Let the list confirm the filter
 					var lCmd tea.Cmd
 					m.fileBrowser, lCmd = m.fileBrowser.Update(msg)
 					return m, lCmd
 				}
 				if item, ok := m.fileBrowser.SelectedItem().(fileItem); ok {
+					if item.isDir {
+						m.browserDir = item.path
+						m.rebuildFileBrowser()
+						return m, nil
+					}
 					content, err := loadFile(item.path)
 					if err == nil {
 						m.ta.SetValue(content)
@@ -208,6 +231,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.dirty = false
 						m.lastSaved = time.Now()
 						m.statusMsg = "Opened \"" + filepath.Base(item.path) + "\""
+						p := loadPrefs()
+						p.LastDir = m.browserDir
+						savePrefs(p)
 					} else {
 						m.statusMsg = "Error: " + err.Error()
 					}
@@ -294,16 +320,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, clearStatus(2 * time.Second)
 
 		case "ctrl+o": // Open file browser
-			bw := m.width - 8
-			if bw > 64 {
-				bw = 64
-			}
-			bh := m.height - 10
-			if bh > 20 {
-				bh = 20
-			}
-			items := scanTxtFiles()
-			m.fileBrowser = newFileBrowser(themes[m.themeIdx], items, bw, bh)
+			m.rebuildFileBrowser()
 			m.mode = modeFileBrowser
 			return m, nil
 
@@ -441,6 +458,20 @@ func (m Model) View() string {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// rebuildFileBrowser recreates the file browser list for m.browserDir.
+func (m *Model) rebuildFileBrowser() {
+	bw := m.width - 8
+	if bw > 64 {
+		bw = 64
+	}
+	bh := m.height - 10
+	if bh > 20 {
+		bh = 20
+	}
+	items := scanDir(m.browserDir)
+	m.fileBrowser = newFileBrowser(themes[m.themeIdx], items, bw, bh, m.browserDir)
+}
 
 // openNamePrompt switches to the filename prompt, pre-filling with prefill.
 // Returns the Focus command for the text input.

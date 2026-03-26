@@ -459,6 +459,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Mouse events switch to reading mode so the full viewport is available.
+	if _, ok := msg.(tea.MouseMsg); ok {
+		m.typewriterMode = false
+	}
+
 	// All other messages (mouse, focus, blink) go to textarea
 	var taCmd tea.Cmd
 	m.ta, taCmd = m.ta.Update(msg)

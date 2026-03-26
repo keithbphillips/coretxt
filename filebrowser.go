@@ -13,13 +13,13 @@ import (
 // ─── List item ────────────────────────────────────────────────────────────────
 
 type fileItem struct {
-	name    string
+	path    string // full path
 	size    int64
 	modTime time.Time
 }
 
-func (f fileItem) Title() string       { return f.name }
-func (f fileItem) FilterValue() string { return f.name }
+func (f fileItem) Title() string       { return filepath.Base(f.path) }
+func (f fileItem) FilterValue() string { return filepath.Base(f.path) }
 func (f fileItem) Description() string {
 	return fmt.Sprintf("%s  ·  %s", formatFileSize(f.size), formatFileAge(f.modTime))
 }
@@ -27,7 +27,8 @@ func (f fileItem) Description() string {
 // ─── Directory scan ───────────────────────────────────────────────────────────
 
 func scanTxtFiles() []list.Item {
-	entries, err := os.ReadDir(".")
+	dir := docsDir()
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
@@ -41,7 +42,7 @@ func scanTxtFiles() []list.Item {
 			continue
 		}
 		items = append(items, fileItem{
-			name:    e.Name(),
+			path:    filepath.Join(dir, e.Name()),
 			size:    info.Size(),
 			modTime: info.ModTime(),
 		})

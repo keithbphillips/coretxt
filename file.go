@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,6 +25,28 @@ func clearStatus(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg {
 		return statusClearMsg{}
 	})
+}
+
+// ─── Paths ────────────────────────────────────────────────────────────────────
+
+// docsDir returns ~/Documents, creating it if necessary.
+func docsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "."
+	}
+	dir := filepath.Join(home, "Documents")
+	_ = os.MkdirAll(dir, 0755)
+	return dir
+}
+
+// resolvePath returns the path unchanged if it is absolute, otherwise joins it
+// with docsDir so bare filenames always map to ~/Documents.
+func resolvePath(name string) string {
+	if filepath.IsAbs(name) {
+		return name
+	}
+	return filepath.Join(docsDir(), name)
 }
 
 // ─── File I/O ─────────────────────────────────────────────────────────────────

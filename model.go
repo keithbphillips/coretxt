@@ -78,6 +78,7 @@ func newModel(filename string) Model {
 
 	contentLoaded := false
 	if filename != "" {
+		filename = resolvePath(filename)
 		if content, err := loadFile(filename); err == nil && content != "" {
 			m.ta.SetValue(content)
 			m.lastSaved = time.Now()
@@ -154,7 +155,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if filepath.Ext(name) == "" {
 						name += ".txt"
 					}
-					m.filename = name
+					m.filename = resolvePath(name)
 				}
 				if m.filename != "" && m.filename != "untitled.txt" {
 					if err := m.performSave(); err != nil {
@@ -200,13 +201,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, lCmd
 				}
 				if item, ok := m.fileBrowser.SelectedItem().(fileItem); ok {
-					content, err := loadFile(item.name)
+					content, err := loadFile(item.path)
 					if err == nil {
 						m.ta.SetValue(content)
-						m.filename = item.name
+						m.filename = item.path
 						m.dirty = false
 						m.lastSaved = time.Now()
-						m.statusMsg = "Opened \"" + item.name + "\""
+						m.statusMsg = "Opened \"" + filepath.Base(item.path) + "\""
 					} else {
 						m.statusMsg = "Error: " + err.Error()
 					}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -20,8 +21,8 @@ func renderHeader(m Model) string {
 	left := accentText(t).Render(" ⬡ " + appName + " ")
 
 	// Center: filename + modified dot
-	fname := m.filename
-	if fname == "" {
+	fname := filepath.Base(m.filename)
+	if m.filename == "" {
 		fname = "untitled"
 	}
 	center := normalText(t).Render("  " + fname)

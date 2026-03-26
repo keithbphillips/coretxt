@@ -9,6 +9,7 @@ import (
 type prefs struct {
 	ThemeIdx int    `json:"theme_idx"`
 	LastDir  string `json:"last_dir"`
+	LastFile string `json:"last_file"`
 }
 
 func prefsPath() string {

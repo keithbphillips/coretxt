@@ -72,6 +72,7 @@ func renderKeyHints(m Model) string {
 	t := themes[m.themeIdx]
 
 	hints := []struct{ key, label string }{
+		{"^N", "New"},
 		{"^S", "Save"},
 		{"F3", "Save As"},
 		{"^O", "Open"},

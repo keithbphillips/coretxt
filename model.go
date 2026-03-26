@@ -37,6 +37,7 @@ type Model struct {
 	height      int
 	statusMsg        string
 	quitConfirm      bool
+	newDocConfirm    bool
 	typewriterMode   bool   // true while typing, false while navigating
 	browserDir       string // current directory shown in the file browser
 	browserSaveMode  bool   // true when browser was opened for saving
@@ -85,11 +86,17 @@ func newModel(filename string) Model {
 
 	m.ta.Focus()
 
+	// If no filename given on the command line, resume the last saved file.
+	if filename == "" && p.LastFile != "" {
+		filename = p.LastFile
+	}
+
 	contentLoaded := false
 	if filename != "" {
 		filename = resolvePath(filename)
 		if content, err := loadFile(filename); err == nil && content != "" {
 			m.ta.SetValue(content)
+			m.filename = filename
 			m.lastSaved = time.Now()
 			contentLoaded = true
 		}
@@ -344,6 +351,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Checking \"" + word + "\"…"
 			return m, tea.Batch(clearStatus(5*time.Second), checkSpelling(word, left, right))
 
+		case "ctrl+n":
+			if m.dirty {
+				if m.newDocConfirm {
+					m.clearDocument()
+					return m, nil
+				}
+				m.newDocConfirm = true
+				m.statusMsg = "Unsaved changes — Ctrl+N again to discard"
+				return m, clearStatus(4 * time.Second)
+			}
+			m.clearDocument()
+			return m, nil
+
 		case "ctrl+s":
 			if m.filename == "" || m.filename == "untitled.txt" {
 				m.openSaveBrowser()
@@ -407,6 +427,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.typewriterMode = true
 			m.quitConfirm = false
+			m.newDocConfirm = false
 			m.dirty = true
 			if isEndOfParagraph(m.ta) {
 				m.ta.InsertString("\n\n    ")
@@ -423,6 +444,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		default:
 			m.quitConfirm = false
+			m.newDocConfirm = false
 			if !isNavigationKey(msg) {
 				m.dirty = true
 				m.typewriterMode = true
@@ -511,6 +533,17 @@ func (m *Model) rebuildFileBrowser() {
 	}
 }
 
+// clearDocument resets the editor to a blank untitled document.
+func (m *Model) clearDocument() {
+	m.ta.SetValue("")
+	m.ta.InsertString("    ")
+	m.filename = ""
+	m.dirty = false
+	m.quitConfirm = false
+	m.newDocConfirm = false
+	m.statusMsg = ""
+}
+
 // openSaveBrowser switches to the file browser in save mode.
 func (m *Model) openSaveBrowser() {
 	m.browserSaveMode = true
@@ -535,6 +568,9 @@ func (m *Model) performSave() error {
 	m.dirty = false
 	m.lastSaved = time.Now()
 	m.quitConfirm = false
+	p := loadPrefs()
+	p.LastFile = m.filename
+	savePrefs(p)
 	return nil
 }
 

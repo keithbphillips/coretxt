@@ -25,6 +25,7 @@ func renderHelp(m Model) string {
 		{
 			"FILE",
 			[]entry{
+				{"Ctrl+N", "New document"},
 				{"Ctrl+S", "Save file"},
 				{"Ctrl+Q", "Quit (confirms if unsaved)"},
 				{"Ctrl+C", "Force quit"},

@@ -2,6 +2,8 @@
 
 A neon terminal text editor for writing novels and long-form prose. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea).
 
+![coretxt screenshot](Screenshot.png)
+
 ## Features
 
 - Distraction-free full-screen editing

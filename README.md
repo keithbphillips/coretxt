@@ -22,7 +22,7 @@ go install coretxt@latest
 Or build from source:
 
 ```sh
-git clone https://github.com/keithreally/coretxt
+git clone https://github.com/keithbphillips/coretxt
 cd coretxt
 go build -o coretxt .
 ```

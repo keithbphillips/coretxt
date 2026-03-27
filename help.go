@@ -47,7 +47,6 @@ func renderHelp(m Model) string {
 				{"Backspace", "Delete back"},
 				{"Ctrl+W", "Delete word back"},
 				{"Ctrl+K", "Delete to end of line"},
-				{"Ctrl+Z", "Undo"},
 			},
 		},
 		{

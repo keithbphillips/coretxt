@@ -10,7 +10,6 @@ A neon terminal text editor for writing novels and long-form prose. Built with [
 - Four neon color themes: CYBERPUNK, SYNTHWAVE, MATRIX, NEON AMBER
 - Spell check via `aspell`
 - File browser for opening existing files
-- Undo support
 - Mouse support
 
 ## Install
@@ -50,7 +49,6 @@ Open an existing file or start a new one. If no filename is given, you'll be pro
 | `Backspace` | Delete back |
 | `Ctrl+W` | Delete word back |
 | `Ctrl+K` | Delete to end of line |
-| `Ctrl+Z` | Undo |
 | `F1` | Toggle help |
 | `F2` | Cycle color theme |
 

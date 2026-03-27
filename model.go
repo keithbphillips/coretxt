@@ -594,6 +594,7 @@ func (m *Model) performSave() error {
 	return nil
 }
 
+
 func isNavigationKey(msg tea.KeyMsg) bool {
 	switch msg.Type {
 	case tea.KeyUp, tea.KeyDown, tea.KeyLeft, tea.KeyRight,

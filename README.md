@@ -41,7 +41,7 @@ Open an existing file or start a new one. If no filename is given, you'll be pro
 | `Ctrl+S` | Save file |
 | `Ctrl+Q` | Quit (confirms if unsaved) |
 | `Ctrl+C` | Force quit |
-| Arrow keys | Move cursor |
+| `Ctrl+A` / `Ctrl+E` | Start / end of paragraph |
 | `Ctrl+← / →` | Jump word |
 | `Ctrl+Home/End` | Beginning / end of document |
 | `PgUp / PgDn` | Scroll page |

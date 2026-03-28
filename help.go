@@ -34,7 +34,7 @@ func renderHelp(m Model) string {
 		{
 			"NAVIGATION",
 			[]entry{
-				{"Arrow Keys", "Move cursor"},
+				{"Ctrl+A / Ctrl+E", "Start / end of paragraph"},
 				{"Ctrl+← / →", "Jump word"},
 				{"Ctrl+Home/End", "Beginning / end of document"},
 				{"PgUp / PgDn", "Scroll page"},

@@ -451,9 +451,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.typewriterMode = false
 			}
+			prevLine := m.ta.Line()
 			var taCmd tea.Cmd
 			m.ta, taCmd = m.ta.Update(msg)
+			// If the cursor moved up (e.g. backspace at start of line,
+			// ctrl+w crossing a line boundary), typewriter mode can't
+			// scroll back up to show it — switch to reading mode instead.
+			if m.ta.Line() < prevLine {
+				m.typewriterMode = false
+			}
 			m.syncTaHeight()
+			// SetHeight doesn't call repositionView, so the cursor can land
+			// outside the resized viewport. A no-op Update fixes it.
+			m.ta, _ = m.ta.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{}})
 			cmds = append(cmds, taCmd)
 			return m, tea.Batch(cmds...)
 		}
@@ -605,6 +615,7 @@ func isNavigationKey(msg tea.KeyMsg) bool {
 	}
 	switch msg.String() {
 	case "ctrl+left", "ctrl+right", "ctrl+home", "ctrl+end",
+		"ctrl+a", "ctrl+e", "ctrl+f", "ctrl+b", "ctrl+n", "ctrl+p",
 		"alt+left", "alt+right", "alt+up", "alt+down":
 		return true
 	}

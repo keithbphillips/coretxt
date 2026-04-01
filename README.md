@@ -87,4 +87,4 @@ Open an existing file or start a new one. If no filename is given, you'll be pro
 - `aspell` (optional, for spell check)
   - **Linux:** install via your package manager, e.g. `sudo apt install aspell` or `sudo dnf install aspell`
   - **macOS:** `brew install aspell`
-  - **Windows:** download the installer from [Aspell for Windows (GNU Win32)](https://gnuwin32.sourceforge.net/packages/aspell.htm) and ensure `aspell.exe` is on your `PATH`
+  - **Windows:** download the installer from [Aspell for Windows](http://aspell.net/win32/) and ensure `aspell.exe` is on your `PATH`

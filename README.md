@@ -18,12 +18,6 @@ A neon console text editor for writing novels and long-form prose. Runs in the t
 
 Download the latest release for your platform from the [Releases page](https://github.com/keithbphillips/coretxt/releases).
 
-### Install with Go
-
-```sh
-go install coretxt@latest
-```
-
 ### Build from source
 
 **Prerequisites:** [Go 1.24+](https://go.dev/dl/)

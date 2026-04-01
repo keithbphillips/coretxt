@@ -1,6 +1,6 @@
 # coretxt
 
-A neon terminal text editor for writing novels and long-form prose. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea).
+A neon console text editor for writing novels and long-form prose. Runs in the terminal on Linux, macOS, and Windows. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea).
 
 ![coretxt screenshot](Screenshot.png)
 
@@ -14,22 +14,50 @@ A neon terminal text editor for writing novels and long-form prose. Built with [
 
 ## Install
 
+### Pre-built binaries
+
+Download the latest release for your platform from the [Releases page](https://github.com/keithbphillips/coretxt/releases).
+
+### Install with Go
+
 ```sh
 go install coretxt@latest
 ```
 
-Or build from source:
+### Build from source
+
+**Prerequisites:** [Go 1.24+](https://go.dev/dl/)
 
 ```sh
 git clone https://github.com/keithbphillips/coretxt
 cd coretxt
+```
+
+**Linux / macOS**
+```sh
 go build -o coretxt .
+```
+
+**Windows (Command Prompt)**
+```cmd
+go build -o coretxt.exe .
+```
+
+**Windows (PowerShell)**
+```powershell
+go build -o coretxt.exe .
 ```
 
 ## Usage
 
+**Linux / macOS**
 ```sh
-coretxt [file]
+./coretxt [file]
+```
+
+**Windows**
+```cmd
+coretxt.exe [file]
 ```
 
 Open an existing file or start a new one. If no filename is given, you'll be prompted when saving.
@@ -55,4 +83,4 @@ Open an existing file or start a new one. If no filename is given, you'll be pro
 ## Dependencies
 
 - Go 1.24+
-- `aspell` (optional, for spell check)
+- `aspell` (optional, for spell check — Linux/macOS only)

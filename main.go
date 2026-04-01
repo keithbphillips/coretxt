@@ -10,7 +10,7 @@ import (
 func main() {
 	var filename string
 	if len(os.Args) > 1 {
-		filename = os.Args[1]
+		filename = resolvePath(os.Args[1])
 	}
 
 	m := newModel(filename)

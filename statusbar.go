@@ -79,7 +79,7 @@ func renderKeyHints(m Model) string {
 		{"^Q", "Quit"},
 		{"F1", "Help"},
 		{"F2", "Theme"},
-		{"^Spc", "Spell"},
+		{"F7/^Spc", "Spell"},
 	}
 
 	var sb strings.Builder

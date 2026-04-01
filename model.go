@@ -342,7 +342,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// ── Normal editing keys ───────────────────────────────────────────
 		switch msg.String() {
 
-		case "ctrl+@": // Ctrl+Space — spell check word at cursor
+		case "ctrl+@", "f7": // Ctrl+Space or F7 — spell check word at cursor
 			word, left, right := wordAtCursor(m)
 			if word == "" {
 				m.statusMsg = "No word at cursor"

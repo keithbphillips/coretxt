@@ -74,11 +74,13 @@ func renderKeyHints(m Model) string {
 	hints := []struct{ key, label string }{
 		{"^N", "New"},
 		{"^S", "Save"},
-		{"F3", "Save As"},
 		{"^O", "Open"},
+		{"^F", "Find"},
+		{"^R", "Replace"},
 		{"^Q", "Quit"},
 		{"F1", "Help"},
 		{"F2", "Theme"},
+		{"F3", "Save As"},
 		{"F7/^Spc", "Spell"},
 	}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -21,6 +22,8 @@ const (
 	modePromptName
 	modeFileBrowser
 	modeSpellCheck
+	modeSearch
+	modeReplace
 )
 
 // Model is the central bubbletea application state.
@@ -42,10 +45,16 @@ type Model struct {
 	browserDir       string // current directory shown in the file browser
 	browserSaveMode  bool   // true when browser was opened for saving
 	promptDir        string // directory used by name prompt when saving
-	spellWord        string
-	spellSuggestions []string
-	spellWordLeft    int
-	spellWordRight   int
+	spellWord            string
+	spellSuggestions     []string
+	spellWordLeft        int
+	spellWordRight       int
+	lastBackupWordCount  int
+	searchInput          textinput.Model
+	replaceInput         textinput.Model
+	searchMatches        []int
+	searchCurrent        int
+	searchReplaceFocus   int // 0 = find field, 1 = replace field
 }
 
 func newModel(filename string) Model {
@@ -62,6 +71,18 @@ func newModel(filename string) Model {
 	ni.Width = 44
 	ni.Prompt = "  Filename: "
 
+	si := textinput.New()
+	si.Placeholder = "search..."
+	si.CharLimit = 256
+	si.Width = 25
+	si.Prompt = ""
+
+	ri := textinput.New()
+	ri.Placeholder = "replace with..."
+	ri.CharLimit = 256
+	ri.Width = 25
+	ri.Prompt = ""
+
 	p := loadPrefs()
 
 	browserDir := p.LastDir
@@ -70,15 +91,19 @@ func newModel(filename string) Model {
 	}
 
 	m := Model{
-		ta:         ta,
-		nameInput:  ni,
-		themeIdx:   p.ThemeIdx,
-		filename:   filename,
-		browserDir: browserDir,
+		ta:           ta,
+		nameInput:    ni,
+		searchInput:  si,
+		replaceInput: ri,
+		themeIdx:     p.ThemeIdx,
+		filename:     filename,
+		browserDir:   browserDir,
 	}
 
 	applyTheme(&m.ta, themes[m.themeIdx])
 	applyThemeToInput(&m.nameInput, themes[m.themeIdx])
+	applyThemeToInput(&m.searchInput, themes[m.themeIdx])
+	applyThemeToInput(&m.replaceInput, themes[m.themeIdx])
 
 	// Add ctrl+arrow word movement on top of the default alt+arrow bindings.
 	m.ta.KeyMap.WordForward.SetKeys("alt+right", "alt+f", "ctrl+right")
@@ -98,6 +123,7 @@ func newModel(filename string) Model {
 			m.ta.SetValue(content)
 			m.filename = filename
 			m.lastSaved = time.Now()
+			m.lastBackupWordCount = wordCount(content)
 			contentLoaded = true
 		}
 	}
@@ -273,6 +299,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.filename = item.path
 						m.dirty = false
 						m.lastSaved = time.Now()
+						m.lastBackupWordCount = wordCount(content)
 						m.statusMsg = "Opened \"" + filepath.Base(item.path) + "\""
 						p := loadPrefs()
 						p.LastDir = m.browserDir
@@ -318,6 +345,72 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// ── Search mode ───────────────────────────────────────────────────
+		if m.mode == modeSearch {
+			switch msg.String() {
+			case "esc":
+				m.mode = modeEdit
+				return m, nil
+			case "enter", "down":
+				m.nextMatch()
+				return m, nil
+			case "up":
+				m.prevMatch()
+				return m, nil
+			default:
+				var cmd tea.Cmd
+				m.searchInput, cmd = m.searchInput.Update(msg)
+				m.updateSearchMatches()
+				return m, cmd
+			}
+		}
+
+		// ── Replace mode ──────────────────────────────────────────────────
+		if m.mode == modeReplace {
+			switch msg.String() {
+			case "esc":
+				m.mode = modeEdit
+				return m, nil
+			case "tab":
+				if m.searchReplaceFocus == 0 {
+					m.searchReplaceFocus = 1
+					m.searchInput.Blur()
+					return m, m.replaceInput.Focus()
+				}
+				m.searchReplaceFocus = 0
+				m.replaceInput.Blur()
+				return m, m.searchInput.Focus()
+			case "enter":
+				if m.searchReplaceFocus == 0 {
+					// Move focus to replace field
+					m.searchReplaceFocus = 1
+					m.searchInput.Blur()
+					return m, m.replaceInput.Focus()
+				}
+				m.replaceCurrentMatch()
+				return m, nil
+			case "ctrl+a":
+				m.doReplaceAll()
+				return m, clearStatus(3 * time.Second)
+			case "down":
+				m.nextMatch()
+				return m, nil
+			case "up":
+				m.prevMatch()
+				return m, nil
+			default:
+				if m.searchReplaceFocus == 0 {
+					var cmd tea.Cmd
+					m.searchInput, cmd = m.searchInput.Update(msg)
+					m.updateSearchMatches()
+					return m, cmd
+				}
+				var cmd tea.Cmd
+				m.replaceInput, cmd = m.replaceInput.Update(msg)
+				return m, cmd
+			}
+		}
+
 		// ── Escape clears overlay states ──────────────────────────────────
 		if msg.Type == tea.KeyEsc {
 			if m.mode == modeHelp {
@@ -341,6 +434,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// ── Normal editing keys ───────────────────────────────────────────
 		switch msg.String() {
+
+		case "ctrl+f":
+			return m, m.enterSearchMode()
+
+		case "ctrl+r":
+			return m, m.enterReplaceMode()
 
 		case "ctrl+@", "f7": // Ctrl+Space or F7 — spell check word at cursor
 			word, left, right := wordAtCursor(m)
@@ -417,6 +516,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			savePrefs(prefs{ThemeIdx: m.themeIdx})
 			applyTheme(&m.ta, themes[m.themeIdx])
 			applyThemeToInput(&m.nameInput, themes[m.themeIdx])
+			applyThemeToInput(&m.searchInput, themes[m.themeIdx])
+			applyThemeToInput(&m.replaceInput, themes[m.themeIdx])
 			focusCmd := m.ta.Focus() // resets internal style pointer to current copy
 			if m.width > 0 {
 				m.ta.SetWidth(m.width)
@@ -535,12 +636,19 @@ func (m Model) View() string {
 		Render("")
 	padding := strings.Repeat("\n"+blankLine, padLines)
 
+	var bottomBar string
+	if m.mode == modeSearch || m.mode == modeReplace {
+		bottomBar = renderSearchBar(m)
+	} else {
+		bottomBar = renderKeyHints(m)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left,
 		renderHeader(m),
 		spacer,
 		m.ta.View()+padding,
 		renderStatusBar(m),
-		renderKeyHints(m),
+		bottomBar,
 	)
 }
 
@@ -572,6 +680,7 @@ func (m *Model) clearDocument() {
 	m.quitConfirm = false
 	m.newDocConfirm = false
 	m.statusMsg = ""
+	m.lastBackupWordCount = 0
 }
 
 // openSaveBrowser switches to the file browser in save mode.
@@ -592,7 +701,8 @@ func (m *Model) openNamePrompt(prefill string) tea.Cmd {
 }
 
 func (m *Model) performSave() error {
-	if err := saveFile(m.filename, m.ta.Value()); err != nil {
+	content := m.ta.Value()
+	if err := saveFile(m.filename, content); err != nil {
 		return err
 	}
 	m.dirty = false
@@ -601,6 +711,14 @@ func (m *Model) performSave() error {
 	p := loadPrefs()
 	p.LastFile = m.filename
 	savePrefs(p)
+
+	// Save a backup whenever writing has grown by the threshold since the last one.
+	current := wordCount(content)
+	if current-m.lastBackupWordCount >= backupWordThreshold {
+		_ = saveBackup(m.filename, content)
+		m.lastBackupWordCount = current
+	}
+
 	return nil
 }
 
@@ -630,6 +748,111 @@ func isEndOfParagraph(ta textarea.Model) bool {
 	}
 	return strings.TrimSpace(lines[row]) != ""
 }
+
+// ─── Search / Replace helpers ─────────────────────────────────────────────────
+
+func (m *Model) enterSearchMode() tea.Cmd {
+	m.mode = modeSearch
+	m.searchReplaceFocus = 0
+	m.updateSearchMatches()
+	return m.searchInput.Focus()
+}
+
+func (m *Model) enterReplaceMode() tea.Cmd {
+	m.mode = modeReplace
+	m.searchReplaceFocus = 0
+	m.replaceInput.Blur()
+	m.updateSearchMatches()
+	return m.searchInput.Focus()
+}
+
+// updateSearchMatches recalculates all match positions and jumps to the first.
+func (m *Model) updateSearchMatches() {
+	m.searchMatches = findAllMatches(m.ta.Value(), m.searchInput.Value())
+	if m.searchCurrent >= len(m.searchMatches) {
+		m.searchCurrent = 0
+	}
+	if len(m.searchMatches) > 0 {
+		m.jumpToCurrentMatch()
+	}
+}
+
+func (m *Model) jumpToCurrentMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.moveCursorTo(m.searchMatches[m.searchCurrent])
+	m.typewriterMode = false
+	m.syncTaHeight()
+}
+
+// moveCursorTo navigates the textarea cursor to the given rune offset using
+// Ctrl+Home to reach the document start, then Right × offset. This is the
+// only reliable approach: CursorDown navigates by visual wrap-rows, not
+// logical newline-separated lines, so Down×line would land in the wrong place
+// whenever paragraphs wrap across more than one visual row.
+func (m *Model) moveCursorTo(runeOffset int) {
+	m.ta, _ = m.ta.Update(tea.KeyMsg{Type: tea.KeyCtrlHome})
+	for i := 0; i < runeOffset; i++ {
+		m.ta, _ = m.ta.Update(tea.KeyMsg{Type: tea.KeyRight})
+	}
+}
+
+func (m *Model) nextMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.searchCurrent = (m.searchCurrent + 1) % len(m.searchMatches)
+	m.jumpToCurrentMatch()
+}
+
+func (m *Model) prevMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.searchCurrent = (m.searchCurrent - 1 + len(m.searchMatches)) % len(m.searchMatches)
+	m.jumpToCurrentMatch()
+}
+
+// replaceCurrentMatch deletes the matched text at the cursor and inserts the
+// replacement, then advances to the next match.
+func (m *Model) replaceCurrentMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	queryLen := len([]rune(m.searchInput.Value()))
+	m.jumpToCurrentMatch()
+	for i := 0; i < queryLen; i++ {
+		m.ta, _ = m.ta.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	}
+	m.ta.InsertString(m.replaceInput.Value())
+	m.dirty = true
+	m.searchMatches = findAllMatches(m.ta.Value(), m.searchInput.Value())
+	if m.searchCurrent >= len(m.searchMatches) {
+		m.searchCurrent = 0
+	}
+	if len(m.searchMatches) > 0 {
+		m.jumpToCurrentMatch()
+	}
+}
+
+// doReplaceAll replaces every occurrence at once and reports the count.
+func (m *Model) doReplaceAll() {
+	query := m.searchInput.Value()
+	if query == "" {
+		return
+	}
+	newText, count := replaceAllOccurrences(m.ta.Value(), query, m.replaceInput.Value())
+	if count > 0 {
+		m.ta.SetValue(newText)
+		m.dirty = true
+	}
+	m.searchMatches = findAllMatches(newText, query)
+	m.searchCurrent = 0
+	m.statusMsg = fmt.Sprintf("Replaced %d occurrence(s)", count)
+}
+
+// ─── Theme helpers ────────────────────────────────────────────────────────────
 
 // applyThemeToInput styles the textinput widget to match the current theme.
 func applyThemeToInput(ni *textinput.Model, t Theme) {

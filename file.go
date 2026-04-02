@@ -3,12 +3,16 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 const autosaveInterval = 30 * time.Second
+const backupWordThreshold = 200
+const maxBackups = 5
 
 // ─── Tick messages ────────────────────────────────────────────────────────────
 
@@ -61,4 +65,36 @@ func loadFile(path string) (string, error) {
 
 func saveFile(path string, content string) error {
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// ─── Backups ──────────────────────────────────────────────────────────────────
+
+// saveBackup writes a timestamped copy of content into a .coretxt_backups
+// directory next to mainPath, then prunes old backups to keep at most maxBackups.
+func saveBackup(mainPath string, content string) error {
+	dir := filepath.Join(filepath.Dir(mainPath), ".coretxt_backups")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	base := strings.TrimSuffix(filepath.Base(mainPath), filepath.Ext(mainPath))
+	ext := filepath.Ext(mainPath)
+	timestamp := time.Now().Format("20060102_150405")
+	backupPath := filepath.Join(dir, base+"_"+timestamp+ext)
+	if err := os.WriteFile(backupPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	pruneBackups(dir, base, ext)
+	return nil
+}
+
+// pruneBackups removes the oldest backup files so that at most maxBackups remain.
+func pruneBackups(dir, base, ext string) {
+	matches, err := filepath.Glob(filepath.Join(dir, base+"_*"+ext))
+	if err != nil || len(matches) <= maxBackups {
+		return
+	}
+	sort.Strings(matches) // timestamp names sort oldest-first
+	for _, old := range matches[:len(matches)-maxBackups] {
+		os.Remove(old)
+	}
 }

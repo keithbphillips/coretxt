@@ -10,6 +10,8 @@ A neon console text editor for writing novels and long-form prose. Runs in the t
 - Four neon color themes: CYBERPUNK, SYNTHWAVE, MATRIX, NEON AMBER
 - Spell check via `aspell`
 - File browser for opening existing files
+- Find (`Ctrl+F`) and find & replace (`Ctrl+R`) with case-insensitive matching
+- Automatic timestamped backups saved every 200 words to `.coretxt_backups/` (keeps last 5)
 - Mouse support
 
 ## Install
@@ -74,6 +76,8 @@ Open an existing file or start a new one. If no filename is given, you'll be pro
 | `F1` | Toggle help |
 | `F2` | Cycle color theme |
 | `F7` / `Ctrl+Space` | Spell check word at cursor |
+| `Ctrl+F` | Find (search bar) |
+| `Ctrl+R` | Find & replace |
 
 ## Dependencies
 

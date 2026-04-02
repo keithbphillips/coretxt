@@ -50,6 +50,17 @@ func renderHelp(m Model) string {
 			},
 		},
 		{
+			"SEARCH",
+			[]entry{
+				{"Ctrl+F", "Find (live, case-insensitive)"},
+				{"↑ / ↓ or Enter", "Previous / next match"},
+				{"Ctrl+R", "Find and replace"},
+				{"Tab", "Switch find ↔ replace field"},
+				{"Enter", "Replace current match"},
+				{"Ctrl+A", "Replace all matches"},
+			},
+		},
+		{
 			"INTERFACE",
 			[]entry{
 				{"F1", "Toggle this help"},

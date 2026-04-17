@@ -12,7 +12,7 @@ A neon console text editor for writing novels and long-form prose. Runs in the t
 - File browser for opening existing files
 - Find (`Ctrl+F`) and find & replace (`Ctrl+R`) with case-insensitive matching
 - Automatic timestamped backups saved every 200 words to `.coretxt_backups/` (keeps last 5)
-- Mouse support
+- Mouse support: scroll wheel to navigate, click to reposition cursor
 
 ## Install
 

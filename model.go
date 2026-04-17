@@ -570,8 +570,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Mouse wheel: move the cursor so the viewport can scroll the full
-	// document. Other mouse events (clicks, motion) pass through normally.
+	// Mouse events: wheel scrolling and click-to-position.
 	if mm, ok := msg.(tea.MouseMsg); ok {
 		m.typewriterMode = false
 		switch mm.Button {
@@ -587,6 +586,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.syncTaHeight()
 			return m, tea.Batch(cmds...)
+		case tea.MouseButtonLeft:
+			if mm.Action == tea.MouseActionPress && m.mode == modeEdit {
+				m.handleMouseClick(mm.X, mm.Y)
+				return m, tea.Batch(cmds...)
+			}
 		}
 	}
 

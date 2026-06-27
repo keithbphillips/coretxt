@@ -80,3 +80,12 @@ func dimText(t Theme) lipgloss.Style {
 		Background(lipgloss.Color(t.BarBg)).
 		Foreground(lipgloss.Color(t.Muted))
 }
+
+// dimmedDoc styles the part of the document that continues below the
+// typewriter fold. It uses the editor background with a muted foreground so the
+// upcoming text stays faintly visible while writing instead of vanishing.
+func dimmedDoc(t Theme) lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color(t.Background)).
+		Foreground(lipgloss.Color(t.Muted))
+}

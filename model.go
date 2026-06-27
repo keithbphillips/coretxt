@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type appMode int
@@ -28,33 +29,33 @@ const (
 
 // Model is the central bubbletea application state.
 type Model struct {
-	ta          textarea.Model
-	nameInput   textinput.Model
-	fileBrowser list.Model
-	themeIdx    int
-	filename    string
-	dirty       bool
-	lastSaved   time.Time
-	mode        appMode
-	width       int
-	height      int
-	statusMsg        string
-	quitConfirm      bool
-	newDocConfirm    bool
-	typewriterMode   bool   // true while typing, false while navigating
-	browserDir       string // current directory shown in the file browser
-	browserSaveMode  bool   // true when browser was opened for saving
-	promptDir        string // directory used by name prompt when saving
-	spellWord            string
-	spellSuggestions     []string
-	spellWordLeft        int
-	spellWordRight       int
-	lastBackupWordCount  int
-	searchInput          textinput.Model
-	replaceInput         textinput.Model
-	searchMatches        []int
-	searchCurrent        int
-	searchReplaceFocus   int // 0 = find field, 1 = replace field
+	ta                  textarea.Model
+	nameInput           textinput.Model
+	fileBrowser         list.Model
+	themeIdx            int
+	filename            string
+	dirty               bool
+	lastSaved           time.Time
+	mode                appMode
+	width               int
+	height              int
+	statusMsg           string
+	quitConfirm         bool
+	newDocConfirm       bool
+	typewriterMode      bool   // true while typing, false while navigating
+	browserDir          string // current directory shown in the file browser
+	browserSaveMode     bool   // true when browser was opened for saving
+	promptDir           string // directory used by name prompt when saving
+	spellWord           string
+	spellSuggestions    []string
+	spellWordLeft       int
+	spellWordRight      int
+	lastBackupWordCount int
+	searchInput         textinput.Model
+	replaceInput        textinput.Model
+	searchMatches       []int
+	searchCurrent       int
+	searchReplaceFocus  int // 0 = find field, 1 = replace field
 }
 
 func newModel(filename string) Model {
@@ -325,7 +326,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				m.mode = modeEdit
 			case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-				idx := int(msg.String()[0]-'1')
+				idx := int(msg.String()[0] - '1')
 				if idx < len(m.spellSuggestions) {
 					suggestion := m.spellSuggestions[idx]
 					for i := 0; i < m.spellWordLeft; i++ {
@@ -626,19 +627,28 @@ func (m Model) View() string {
 		Width(m.width).
 		Render("")
 
-	// Fill any remaining space below the textarea with styled blank lines so
-	// the background colour is consistent across the whole screen.
 	th := m.ta.Height()
 	totalDoc := m.height - 4 // header + spacer + statusbar + keyhints
-	padLines := totalDoc - th
-	if padLines < 0 {
-		padLines = 0
-	}
 	blankLine := lipgloss.NewStyle().
 		Background(lipgloss.Color(t.Background)).
 		Width(m.width).
 		Render("")
-	padding := strings.Repeat("\n"+blankLine, padLines)
+
+	// In typewriter mode the textarea fills only the top half of the screen so
+	// the cursor stays mid-screen. Render the whole document area ourselves and
+	// dim everything below the cursor's line — both the gap down to the fold and
+	// the text that continues past it — so the page reads as one faded preview
+	// rather than text abruptly vanishing.
+	var doc string
+	if m.typewriterMode && totalDoc > th {
+		doc = m.dimmedBelowCursor(totalDoc, t, blankLine)
+	} else {
+		padLines := totalDoc - th
+		if padLines < 0 {
+			padLines = 0
+		}
+		doc = m.ta.View() + strings.Repeat("\n"+blankLine, padLines)
+	}
 
 	var bottomBar string
 	if m.mode == modeSearch || m.mode == modeReplace {
@@ -650,7 +660,7 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		renderHeader(m),
 		spacer,
-		m.ta.View()+padding,
+		doc,
 		renderStatusBar(m),
 		bottomBar,
 	)
@@ -725,7 +735,6 @@ func (m *Model) performSave() error {
 
 	return nil
 }
-
 
 func isNavigationKey(msg tea.KeyMsg) bool {
 	switch msg.Type {
@@ -902,4 +911,91 @@ func (m *Model) syncTaHeight() {
 		half = 1
 	}
 	m.ta.SetHeight(half)
+}
+
+// dimmedBelowCursor renders the full document area (totalDoc rows) with every
+// row below the cursor's line shown dimmed. It briefly re-renders the textarea
+// at full height — which shares the same scroll offset, so the top portion and
+// cursor position are unchanged — to capture the wrapped rows that the
+// half-height view hides, then restores the original height.
+func (m Model) dimmedBelowCursor(totalDoc int, t Theme, blankLine string) string {
+	visible := m.ta.Height()
+	// m.ta is a copy, but its viewport is a shared pointer, so restore the
+	// height after rendering to avoid mutating the live model's textarea.
+	m.ta.SetHeight(totalDoc)
+	rows := strings.Split(m.ta.View(), "\n")
+	m.ta.SetHeight(visible)
+
+	cursorRow := cursorDisplayRow(rows)
+	if cursorRow < 0 {
+		// Couldn't locate the cursor; fall back to dimming below the fold.
+		cursorRow = visible - 1
+	}
+
+	dim := dimmedDoc(t).Width(m.width)
+	var b strings.Builder
+	for i := 0; i < totalDoc; i++ {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		switch {
+		case i >= len(rows):
+			b.WriteString(blankLine)
+		case i <= cursorRow:
+			b.WriteString(rows[i])
+		default:
+			b.WriteString(dim.Render(ansi.Strip(rows[i])))
+		}
+	}
+	return b.String()
+}
+
+// cursorDisplayRow returns the index of the rendered row containing the cursor,
+// or -1 if not found. The cursor cell is the only thing in the document view
+// drawn with the underline attribute (see styles.go, where Cursor.Style is
+// Underline(true)); reverse video is matched too in case a focus/blink state
+// renders the cursor that way instead. Both are SGR attributes, so detection is
+// independent of the terminal's colour profile (unlike the cursor-line
+// background, which collapses onto the page background in 256/16-colour modes).
+func cursorDisplayRow(rows []string) int {
+	for i, r := range rows {
+		if rowHasCursorAttr(r) {
+			return i
+		}
+	}
+	return -1
+}
+
+// rowHasCursorAttr reports whether a rendered line contains an SGR sequence that
+// turns on underline (4) or reverse video (7). Colour introducers (38/48/58)
+// consume their parameters so a colour component that happens to be 4 or 7 — or
+// a "48" background introducer — isn't mistaken for the attribute.
+func rowHasCursorAttr(s string) bool {
+	for {
+		i := strings.Index(s, "\x1b[")
+		if i < 0 {
+			return false
+		}
+		j := strings.IndexByte(s[i:], 'm')
+		if j < 0 {
+			return false
+		}
+		params := strings.Split(s[i+2:i+j], ";")
+		for k := 0; k < len(params); k++ {
+			switch params[k] {
+			case "4", "7":
+				return true
+			case "38", "48", "58": // colour introducers
+				if k+1 < len(params) {
+					switch params[k+1] {
+					case "5":
+						k += 2 // x;5;n
+					case "2":
+						k += 4 // x;2;r;g;b
+					}
+				}
+			}
+		}
+		s = s[i+j+1:]
+	}
 }
